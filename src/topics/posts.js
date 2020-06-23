@@ -233,7 +233,7 @@ module.exports = function (Topics) {
 		return await db.getObjectField('topic:' + tid, 'postcount');
 	};
 
-	Topics.getPostReplies = async (pids, callerUid) => {
+	Topics.getPostReplies = async (pids, callerUid, recursiveLevels = 0) => {
 		const keys = pids.map((pid) => "pid:" + pid + ":replies");
 		const arrayOfReplyPids = await db.getSortedSetsMembers(keys);
 
@@ -294,9 +294,25 @@ module.exports = function (Topics) {
 					callerUid,
 					{}
 				);
+
+				if (recursiveLevels < 1) {
+					return {
+						...currentData,
+						replies: postsData,
+					};
+				}
 				return {
 					...currentData,
-					posts: postsData,
+					posts: await Promise.all(
+						postsData.map(async (post) => ({
+							...post,
+							replies: await Topics.getPostReplies(
+								[post.pid],
+								callerUid,
+								recursiveLevels - 1
+							),
+						}))
+					),
 				};
 			})
 		);
